@@ -17,46 +17,40 @@ documentation = "https://docs.rs/speedy2d"
 
 [features]
 default = ["windowing", "image-loading"]
-windowing = ["glutin"]
+windowing = []
 image-loading = ["image"]
 
 [dependencies]
-glow = "0.7"
+slotmap = "1.0"
+glam = {version = "0.21", features = ["scalar-math"] }
 log = "0.4"
 backtrace = "0.3"
-rusttype = { version = "0.9" }
+fontdue = "0.7"
 unicode-normalization = "0.1"
 num-traits = "0.2"
 earcutr = "0.2.0"
 smallvec = "1.9.0"
+miniquad = "0.4.0"
 
 # For image_loading feature
 image = { version = "0.23", optional = true }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# For windowing feature
-glutin = { version = "0.28", optional = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = { version = "0.2" }
-
 [target.'cfg(any(doc, doctest, target_arch = "wasm32"))'.dependencies.web-sys]
 version = "0.3"
 features = [
-    "AddEventListenerOptions",
-    "CssStyleDeclaration",
-    "DomRect",
-    "HtmlCanvasElement",
-    "KeyboardEvent",
-    "MediaQueryList",
-    "MediaQueryListEvent",
-    "MouseEvent",
-    "WheelEvent",
+    #"AddEventListenerOptions",
+    #"CssStyleDeclaration",
+    #"DomRect",
+    #"HtmlCanvasElement",
+    #"KeyboardEvent",
+    #"MediaQueryList",
+    #"MediaQueryListEvent",
+    #"MouseEvent",
+    #"WheelEvent",
     "Performance",
-    "WebGl2RenderingContext",
+    #"WebGl2RenderingContext",
     "Window",
 ]
-
 # Tests using a headless GL context.
 
 [[test]]

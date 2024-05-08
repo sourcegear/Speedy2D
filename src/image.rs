@@ -15,7 +15,7 @@
  */
 
 use crate::dimen::UVec2;
-use crate::glwrapper::GLTexture;
+//use crate::glwrapper::GLTexture;
 
 /// The data type of the pixels making up the raw image data.
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
@@ -38,7 +38,7 @@ pub enum ImageDataType
 pub struct ImageHandle
 {
     pub(crate) size: UVec2,
-    pub(crate) texture: GLTexture
+    pub(crate) texture: miniquad::TextureId
 }
 
 impl ImageHandle

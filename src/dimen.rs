@@ -17,7 +17,6 @@
 use std::convert::TryInto;
 
 use num_traits::{AsPrimitive, Zero};
-use rusttype::Point;
 
 use crate::numeric::{PrimitiveZero, RoundFloat};
 
@@ -434,16 +433,6 @@ impl<T: RoundFloat> RoundFloat for Vector2<T>
     fn round(&self) -> Self
     {
         Vector2::new(self.x.round(), self.y.round())
-    }
-}
-
-impl<T> From<Point<T>> for Vector2<T>
-{
-    #[inline]
-    #[must_use]
-    fn from(point: Point<T>) -> Self
-    {
-        Vector2::new(point.x, point.y)
     }
 }
 

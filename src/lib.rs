@@ -292,8 +292,8 @@
 //! just build-example-webgl
 //! ```
 
-#![deny(warnings)]
-#![deny(missing_docs)]
+//#![deny(warnings)]
+//#![deny(missing_docs)]
 
 use std::fmt::{Display, Formatter};
 #[cfg(any(doc, doctest, all(target_arch = "wasm32", feature = "windowing")))]
@@ -311,18 +311,11 @@ use crate::color::Color;
 use crate::dimen::{UVec2, Vec2};
 use crate::error::{BacktraceError, ErrorMessage};
 use crate::font::FormattedTextBlock;
-use crate::glbackend::GLBackend;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::glbackend::GLBackendGlow;
-use crate::glwrapper::{GLContextManager, GLVersion};
 use crate::image::{ImageDataType, ImageHandle, ImageSmoothingMode, RawBitmapData};
-use crate::renderer2d::Renderer2D;
 use crate::shape::{Polygon, Rect, Rectangle, RoundedRectangle};
-#[cfg(target_arch = "wasm32")]
-use crate::web::WebCanvasElement;
 #[cfg(any(doc, doctest, feature = "windowing"))]
 use crate::window::WindowHandler;
-#[cfg(any(doc, doctest, all(feature = "windowing", not(target_arch = "wasm32"))))]
+//#[cfg(any(doc, doctest, all(feature = "windowing", not(target_arch = "wasm32"))))]
 use crate::window::{
     UserEventSender,
     WindowCreationError,
@@ -332,14 +325,13 @@ use crate::window::{
 };
 #[cfg(any(doc, doctest))]
 use crate::window_internal_doctest::{WebCanvasImpl, WindowGlutin};
-#[cfg(all(
-    feature = "windowing",
-    not(target_arch = "wasm32"),
-    not(any(doc, doctest))
-))]
-use crate::window_internal_glutin::WindowGlutin;
-#[cfg(all(feature = "windowing", target_arch = "wasm32", not(any(doc, doctest))))]
-use crate::window_internal_web::WebCanvasImpl;
+use crate::window_internal_quad::WindowQuad;
+
+pub mod math;
+mod text;
+mod shapes;
+mod quad_gl;
+mod texture;
 
 /// Types representing colors.
 pub mod color;
@@ -369,28 +361,16 @@ pub mod time;
 #[cfg(any(doc, doctest, feature = "windowing"))]
 pub mod window;
 
-#[cfg(all(
-    feature = "windowing",
-    not(target_arch = "wasm32"),
-    not(any(doc, doctest))
-))]
-mod window_internal_glutin;
-
-#[cfg(all(feature = "windowing", target_arch = "wasm32", not(any(doc, doctest))))]
-mod window_internal_web;
+mod window_internal_quad;
 
 #[cfg(any(doc, doctest))]
 mod window_internal_doctest;
 
-#[cfg(target_arch = "wasm32")]
-mod web;
-
-mod font_cache;
-mod glbackend;
-mod glwrapper;
-mod renderer2d;
-mod texture_packer;
+//mod font_cache;
+//mod texture_packer;
 mod utils;
+
+use quad_gl::QuadGl;
 
 /// An error encountered during the creation of a [GLRenderer].
 #[derive(Clone, Debug)]
@@ -440,7 +420,6 @@ impl Display for GLRendererCreationError
 /// a window for you.
 pub struct GLRenderer
 {
-    context: GLContextManager,
     renderer: Graphics2D
 }
 
@@ -462,79 +441,35 @@ impl GLRenderer
     /// which is why this function is marked `unsafe`. It is strongly
     /// advised not to use any other OpenGL libraries in the same thread
     /// as `GLRenderer`.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub unsafe fn new_for_gl_context<V, F>(
-        viewport_size_pixels: V,
-        loader_function: F
-    ) -> Result<Self, BacktraceError<GLRendererCreationError>>
-    where
-        V: Into<UVec2>,
-        F: FnMut(&str) -> *const std::os::raw::c_void
+    pub fn new_for_quad(
+        ) -> Self
     {
-        let backend =
-            GLBackendGlow::new(glow::Context::from_loader_function(loader_function));
+        let mut ctx: Box<dyn miniquad::RenderingBackend> =
+            miniquad::window::new_rendering_backend();
 
-        Self::new_with_gl_backend(
-            viewport_size_pixels,
-            Rc::new(backend),
-            GLVersion::OpenGL2_0
-        )
-    }
-
-    /// Creates a `GLRenderer` for the specified HTML canvas. The canvas
-    /// will be found based on the specified ID.
-    ///
-    /// The parameter `viewport_size_pixels` should be set to
-    /// the initial canvas size, however this can be changed later using
-    /// [GLRenderer:: set_viewport_size_pixels()].
-    #[cfg(any(doc, doctest, target_arch = "wasm32"))]
-    pub fn new_for_web_canvas_by_id<V, S>(
-        viewport_size_pixels: V,
-        element_id: S
-    ) -> Result<Self, BacktraceError<GLRendererCreationError>>
-    where
-        V: Into<UVec2>,
-        S: AsRef<str>
-    {
-        WebCanvasElement::new_by_id(element_id.as_ref())
-            .map_err(|err| {
-                GLRendererCreationError::msg_with_cause("Failed to get canvas", err)
-            })?
-            .get_webgl2_context(viewport_size_pixels)
-    }
-
-    fn new_with_gl_backend<V: Into<UVec2>>(
-        viewport_size_pixels: V,
-        gl_backend: Rc<dyn GLBackend>,
-        gl_version: GLVersion
-    ) -> Result<Self, BacktraceError<GLRendererCreationError>>
-    {
-        let viewport_size_pixels = viewport_size_pixels.into();
-
-        let context =
-            GLContextManager::create(gl_backend, gl_version).map_err(|err| {
-                GLRendererCreationError::msg_with_cause(
-                    "GL context manager creation failed",
-                    err
-                )
-            })?;
-
+        let gl = QuadGl::new(&mut *ctx);
+        let texture_batcher = crate::texture::Batcher::new(&mut *ctx);
         let renderer = Graphics2D {
-            renderer: Renderer2D::new(&context, viewport_size_pixels).map_err(|err| {
-                GLRendererCreationError::msg_with_cause("Renderer2D creation failed", err)
-            })?
+            renderer: ctx,
+            gl:  gl,
+            textures: crate::texture::TexturesContext::new(),
+            texture_batcher: texture_batcher,
         };
 
-        Ok(GLRenderer { context, renderer })
+        GLRenderer { renderer }
+    }
+
+    pub fn create_font_from_bytes(&mut self, bytes: &[u8]) -> Result<crate::font::Font, i32>
+    {
+        let f = text::load_ttf_font_from_bytes(&mut *self.renderer.renderer, bytes).unwrap();
+        Ok(crate::font::Font::new_from_other_kind_of_font(f))
     }
 
     /// Sets the renderer viewport to the specified pixel size, in response to a
     /// change in the window size.
     pub fn set_viewport_size_pixels(&mut self, viewport_size_pixels: UVec2)
     {
-        self.renderer
-            .renderer
-            .set_viewport_size_pixels(viewport_size_pixels)
+        //panic!();
     }
 
     /// Creates a new [ImageHandle] from the specified raw pixel data.
@@ -630,9 +565,10 @@ impl GLRenderer
     #[inline]
     pub fn draw_frame<F: FnOnce(&mut Graphics2D) -> R, R>(&mut self, callback: F) -> R
     {
-        self.renderer.set_clip(None);
+        //self.renderer.set_clip(None);
+        self.renderer.begin_frame();
         let result = callback(&mut self.renderer);
-        self.renderer.renderer.finish_frame();
+        self.renderer.end_frame();
         result
     }
 }
@@ -641,7 +577,7 @@ impl Drop for GLRenderer
 {
     fn drop(&mut self)
     {
-        self.context.mark_invalid();
+        //self.context.mark_invalid();
     }
 }
 
@@ -654,7 +590,10 @@ impl Drop for GLRenderer
 /// [GLRenderer::draw_frame] to obtain an instance.
 pub struct Graphics2D
 {
-    renderer: Renderer2D
+    renderer: Box<dyn miniquad::RenderingBackend>,
+    gl: QuadGl,
+    textures: crate::texture::TexturesContext,
+    texture_batcher: crate::texture::Batcher,
 }
 
 impl Graphics2D
@@ -674,12 +613,7 @@ impl Graphics2D
         data: &[u8]
     ) -> Result<ImageHandle, BacktraceError<ErrorMessage>>
     {
-        self.renderer.create_image_from_raw_pixels(
-            data_type,
-            smoothing_mode,
-            size.into(),
-            data
-        )
+        panic!();
     }
 
     /// Loads an image from the specified file path.
@@ -699,8 +633,7 @@ impl Graphics2D
         path: S
     ) -> Result<ImageHandle, BacktraceError<ErrorMessage>>
     {
-        self.renderer
-            .create_image_from_file_path(data_type, smoothing_mode, path)
+        panic!();
     }
 
     /// Loads an image from the provided encoded image file data.
@@ -745,14 +678,13 @@ impl Graphics2D
         file_bytes: R
     ) -> Result<ImageHandle, BacktraceError<ErrorMessage>>
     {
-        self.renderer
-            .create_image_from_file_bytes(data_type, smoothing_mode, file_bytes)
+        panic!();
     }
 
     /// Fills the screen with the specified color.
     pub fn clear_screen(&mut self, color: Color)
     {
-        self.renderer.clear_screen(color);
+        self.renderer.clear(Some((color.r(), color.g(), color.b(), color.a())), None, None);
     }
 
     /// Draws the provided block of text at the specified position.
@@ -780,7 +712,27 @@ impl Graphics2D
         text: &FormattedTextBlock
     )
     {
-        self.renderer.draw_text(position, color, text);
+        let position = position.into();
+        let parms = 
+            crate::text::TextParams
+            {
+                color: color,
+                font: &text.f,
+                font_size: text.scale as u16,
+                font_scale: 1.0,
+                font_scale_aspect: 1.0,
+                rotation: 0.0,
+            };
+        crate::text::draw_text_ex(
+            &mut self.gl,
+            &mut *self.renderer,
+            &self.textures,
+            &mut self.texture_batcher,
+            &text.text,
+            position.x,
+            position.y + text.dim.offset_y,
+            parms
+            );
     }
 
     /// Draws the provided block of text at the specified position, cropped to
@@ -799,8 +751,28 @@ impl Graphics2D
         text: &FormattedTextBlock
     )
     {
-        self.renderer
-            .draw_text_cropped(position, crop_window, color, text);
+        // TODO need to actually crop
+        let position = position.into();
+        let parms = 
+            crate::text::TextParams
+            {
+                color: color,
+                font: &text.f,
+                font_size: (text.scale * 1.0) as u16,
+                font_scale: 1.0,
+                font_scale_aspect: 1.0,
+                rotation: 0.0,
+            };
+        crate::text::draw_text_ex(
+            &mut self.gl,
+            &mut *self.renderer,
+            &self.textures,
+            &mut self.texture_batcher,
+            &text.text,
+            position.x,
+            position.y + text.dim.offset_y,
+            parms
+            );
     }
 
     /// Draws a polygon with a single color, with the specified offset in
@@ -812,7 +784,7 @@ impl Graphics2D
         color: Color
     )
     {
-        self.renderer.draw_polygon(polygon, offset, color)
+        panic!();
     }
 
     /// Draws a triangle with the specified colors (one color for each corner).
@@ -825,10 +797,7 @@ impl Graphics2D
         vertex_colors_clockwise: [Color; 3]
     )
     {
-        self.renderer.draw_triangle_three_color(
-            vertex_positions_clockwise,
-            vertex_colors_clockwise
-        );
+        //panic!();
     }
 
     /// Draws part of an image, tinted with the provided colors, at the
@@ -853,12 +822,7 @@ impl Graphics2D
         image: &ImageHandle
     )
     {
-        self.renderer.draw_triangle_image_tinted(
-            vertex_positions_clockwise,
-            vertex_colors,
-            image_coords_normalized,
-            image
-        );
+        panic!();
     }
 
     /// Draws a triangle with the specified color.
@@ -867,7 +831,13 @@ impl Graphics2D
     #[inline]
     pub fn draw_triangle(&mut self, vertex_positions_clockwise: [Vec2; 3], color: Color)
     {
-        self.draw_triangle_three_color(vertex_positions_clockwise, [color, color, color]);
+        //self.draw_triangle_three_color(vertex_positions_clockwise, [color, color, color]);
+        shapes::draw_triangle(
+            &mut self.gl, 
+            glam::Vec2::new(vertex_positions_clockwise[0].x, vertex_positions_clockwise[0].y),
+            glam::Vec2::new(vertex_positions_clockwise[1].x, vertex_positions_clockwise[1].y),
+            glam::Vec2::new(vertex_positions_clockwise[2].x, vertex_positions_clockwise[2].y),
+            color);
     }
 
     /// Draws a quadrilateral with the specified colors (one color for each
@@ -1041,6 +1011,7 @@ impl Graphics2D
     {
         let rect = rect.as_ref();
 
+        /*
         self.draw_quad(
             [
                 *rect.top_left(),
@@ -1050,6 +1021,9 @@ impl Graphics2D
             ],
             color
         );
+        */
+        //log::info!("rect: {:?} {:?}", rect, color);
+        shapes::draw_rectangle(&mut self.gl, rect.left(), rect.top(), rect.width(), rect.height(), color);
     }
 
     /// Draws a single-color rounded rectangle at the specified location. The
@@ -1061,6 +1035,23 @@ impl Graphics2D
         color: Color
     )
     {
+        let round_rect = round_rect.as_ref();
+        shapes::draw_rectangle_ex2(
+            &mut self.gl,
+            round_rect.left(),
+            round_rect.top(),
+            round_rect.width(),
+            round_rect.height(),
+            &shapes::DrawRectangleParams2
+            {
+                color: color,
+                border_radius: 8.0, //round_rect.radius,
+                 border_radius_segments: 20,
+                ..Default::default()
+            }
+            );
+
+        /*
         let round_rect = round_rect.as_ref();
 
         //create 3 rectangles (the middle one is taller)
@@ -1198,6 +1189,7 @@ impl Graphics2D
                 Vec2::new(0.0, -1.0)
             ]
         );
+        */
     }
 
     /// Draws a single-color line between the given points, specified in pixels.
@@ -1269,32 +1261,6 @@ impl Graphics2D
         color: Color
     )
     {
-        let center_position = center_position.into();
-
-        let top_left = center_position + Vec2::new(-radius, -radius);
-        let top_right = center_position + Vec2::new(radius, -radius);
-        let bottom_right = center_position + Vec2::new(radius, radius);
-        let bottom_left = center_position + Vec2::new(-radius, radius);
-
-        self.renderer.draw_circle_section(
-            [top_left, top_right, bottom_right],
-            [color, color, color],
-            [
-                Vec2::new(-1.0, -1.0),
-                Vec2::new(1.0, -1.0),
-                Vec2::new(1.0, 1.0)
-            ]
-        );
-
-        self.renderer.draw_circle_section(
-            [bottom_right, bottom_left, top_left],
-            [color, color, color],
-            [
-                Vec2::new(1.0, 1.0),
-                Vec2::new(-1.0, 1.0),
-                Vec2::new(-1.0, -1.0)
-            ]
-        );
     }
 
     /// Draws a triangular subset of a circle.
@@ -1336,13 +1302,21 @@ impl Graphics2D
         vertex_positions_clockwise: [Vec2; 3],
         vertex_colors: [Color; 3],
         vertex_circle_coords_normalized: [Vec2; 3]
-    )
+        )
     {
-        self.renderer.draw_circle_section(
-            vertex_positions_clockwise,
-            vertex_colors,
-            vertex_circle_coords_normalized
-        );
+        /*
+        shapes::draw_triangle(
+            &mut self.gl, 
+            glam::Vec2::new(vertex_positions_clockwise[0].x, vertex_positions_clockwise[0].y),
+            glam::Vec2::new(vertex_positions_clockwise[1].x, vertex_positions_clockwise[1].y),
+            glam::Vec2::new(vertex_positions_clockwise[2].x, vertex_positions_clockwise[2].y),
+            vertex_colors[0]);
+            */
+        //self.renderer.draw_circle_section(
+            //vertex_positions_clockwise,
+            //vertex_colors,
+            //vertex_circle_coords_normalized
+        //);
     }
 
     /// Sets the current clip to the rectangle specified by the given
@@ -1350,7 +1324,6 @@ impl Graphics2D
     /// clipping area.
     pub fn set_clip(&mut self, rect: Option<Rectangle<i32>>)
     {
-        self.renderer.set_clip(rect);
     }
 
     /// Captures a screenshot of the render window. The returned data contains
@@ -1359,21 +1332,37 @@ impl Graphics2D
     /// specify the byte layout (and size) of each pixel.
     pub fn capture(&mut self, format: ImageDataType) -> RawBitmapData
     {
-        self.renderer.capture(format)
+        panic!();
     }
+
+    fn begin_frame(&mut self) {
+        self.gl.reset();
+    }
+
+    pub(crate) fn pixel_perfect_projection_matrix(&self) -> glam::Mat4 {
+        let (width, height) = miniquad::window::screen_size();
+        let dpi = miniquad::window::dpi_scale();
+
+        glam::Mat4::orthographic_rh_gl(0., width / dpi, height / dpi, 0., -1., 1.)
+    }
+
+    fn end_frame(&mut self) {
+        let screen_mat = self.pixel_perfect_projection_matrix();
+        self.gl.draw(&mut *self.renderer, screen_mat);
+
+        self.renderer.commit_frame();
+    }
+
 }
 
 /// Struct representing a window.
-#[cfg(any(doc, doctest, all(feature = "windowing", not(target_arch = "wasm32"))))]
 pub struct Window<UserEventType = ()>
 where
     UserEventType: 'static
 {
-    window_impl: WindowGlutin<UserEventType>,
-    renderer: GLRenderer
+    window_impl: WindowQuad<UserEventType>,
 }
 
-#[cfg(any(doc, doctest, all(feature = "windowing", not(target_arch = "wasm32"))))]
 impl Window<()>
 {
     /// Create a new window, centered in the middle of the primary monitor.
@@ -1420,7 +1409,7 @@ impl Window<()>
     }
 }
 
-#[cfg(any(doc, doctest, all(feature = "windowing", not(target_arch = "wasm32"))))]
+//#[cfg(any(doc, doctest, all(feature = "windowing", not(target_arch = "wasm32"))))]
 impl<UserEventType: 'static> Window<UserEventType>
 {
     /// Create a new window with the specified options, with support for user
@@ -1430,23 +1419,10 @@ impl<UserEventType: 'static> Window<UserEventType>
         options: WindowCreationOptions
     ) -> Result<Self, BacktraceError<WindowCreationError>>
     {
-        let window_impl = WindowGlutin::new(title, options)?;
-
-        let renderer = GLRenderer::new_with_gl_backend(
-            window_impl.get_inner_size_pixels(),
-            window_impl.gl_backend().clone(),
-            GLVersion::OpenGL2_0
-        )
-        .map_err(|err| {
-            BacktraceError::new_with_cause(
-                WindowCreationError::RendererCreationFailed,
-                err
-            )
-        })?;
+        let window_impl = WindowQuad::<UserEventType>::new(title, options)?;
 
         Ok(Window {
-            window_impl,
-            renderer
+            window_impl
         })
     }
 
@@ -1471,100 +1447,7 @@ impl<UserEventType: 'static> Window<UserEventType>
     where
         H: WindowHandler<UserEventType> + 'static
     {
-        self.window_impl.run_loop(handler, self.renderer);
+        self.window_impl.run_loop(handler);
     }
 }
 
-/// Struct representing an HTML canvas.
-#[cfg(any(doc, doctest, all(target_arch = "wasm32", feature = "windowing")))]
-pub struct WebCanvas<UserEventType = ()>
-where
-    UserEventType: 'static
-{
-    inner: Option<WebCanvasImpl>,
-    should_cleanup: bool,
-    user_event_type: PhantomData<UserEventType>
-}
-
-#[cfg(any(doc, doctest, all(target_arch = "wasm32", feature = "windowing")))]
-impl WebCanvas<()>
-{
-    /// Creates (and starts running) a new WebCanvas instance, attached to the
-    /// HTML canvas with the specified ID. Event handlers will be registered for
-    /// keyboard, mouse, and other events.
-    ///
-    /// The event loop/handlers will continue to exist after the WebCanvas is
-    /// dropped. This behaviour can be avoided using
-    /// [WebCanvas::unregister_when_dropped].
-    ///
-    /// The provided [WindowHandler] will start to receive callbacks as soon as
-    /// this function returns. Note that the main thread must not be blocked.
-    pub fn new_for_id<S, H>(
-        element_id: S,
-        handler: H
-    ) -> Result<WebCanvas<()>, BacktraceError<ErrorMessage>>
-    where
-        S: AsRef<str>,
-        H: WindowHandler<()> + 'static
-    {
-        WebCanvas::<()>::new_for_id_with_user_events(element_id, handler)
-    }
-}
-
-#[cfg(any(doc, doctest, all(target_arch = "wasm32", feature = "windowing")))]
-impl<UserEventType: 'static> WebCanvas<UserEventType>
-{
-    /// Creates (and starts running) a new WebCanvas instance, attached to the
-    /// HTML canvas with the specified ID. Event handlers will be registered for
-    /// keyboard, mouse, and other events.
-    ///
-    /// This variant has support for user-generated events. See
-    /// [window::UserEventSender] for more details.
-    ///
-    /// The event loop/handlers will continue to exist after the WebCanvas is
-    /// dropped. This behaviour can be avoided using
-    /// [WebCanvas::unregister_when_dropped].
-    ///
-    /// The provided [WindowHandler] will start to receive callbacks as soon as
-    /// this function returns. Note that the main thread must not be blocked.
-    pub fn new_for_id_with_user_events<S, H>(
-        element_id: S,
-        handler: H
-    ) -> Result<Self, BacktraceError<ErrorMessage>>
-    where
-        S: AsRef<str>,
-        H: WindowHandler<UserEventType> + 'static
-    {
-        Ok(WebCanvas {
-            inner: Some(WebCanvasImpl::new(element_id, handler)?),
-            should_cleanup: false,
-            user_event_type: PhantomData
-        })
-    }
-
-    /// Causes the WebCanvas event loop to terminate when the WebCanvas is
-    /// dropped. If this function is not called, then the event loop (and
-    /// associated event handlers) will continue to run after the WebCanvas
-    /// struct is dropped.
-    pub fn unregister_when_dropped(&mut self)
-    {
-        self.should_cleanup = true;
-    }
-}
-
-#[cfg(any(doc, doctest, all(target_arch = "wasm32", feature = "windowing")))]
-impl<UserEventType: 'static> Drop for WebCanvas<UserEventType>
-{
-    fn drop(&mut self)
-    {
-        if !self.should_cleanup {
-            std::mem::forget(self.inner.take());
-            log::info!(
-                "Deliberately leaking speedy2d::WebCanvas object. This is normally \
-                 fine, but if you want to clean up before the page closes, call \
-                 WebCanvas::unregister_when_dropped(), and retain ownership of the \
-                 WebCanvas until you want to delete it."
-            )
-        }
-    }
-}

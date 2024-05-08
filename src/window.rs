@@ -17,25 +17,17 @@
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 
+use std::rc::Rc;
+use std::cell::RefCell;
 use crate::dimen::{IVec2, UVec2, Vec2};
 use crate::error::{BacktraceError, ErrorMessage};
 use crate::{GLRenderer, Graphics2D};
 
-#[cfg(all(not(target_arch = "wasm32"), not(any(doc, doctest))))]
 type WindowHelperInnerType<UserEventType> =
-    crate::window_internal_glutin::WindowHelperGlutin<UserEventType>;
+    crate::window_internal_quad::WindowHelperQuad<UserEventType>;
 
-#[cfg(all(not(target_arch = "wasm32"), not(any(doc, doctest))))]
 type UserEventSenderInnerType<UserEventType> =
-    crate::window_internal_glutin::UserEventSenderGlutin<UserEventType>;
-
-#[cfg(all(target_arch = "wasm32", not(any(doc, doctest))))]
-type WindowHelperInnerType<UserEventType> =
-    crate::window_internal_web::WindowHelperWeb<UserEventType>;
-
-#[cfg(all(target_arch = "wasm32", not(any(doc, doctest))))]
-type UserEventSenderInnerType<UserEventType> =
-    crate::window_internal_web::UserEventSenderWeb<UserEventType>;
+    crate::window_internal_quad::UserEventSenderQuad<UserEventType>;
 
 #[cfg(any(doc, doctest))]
 type WindowHelperInnerType<UserEventType> = PhantomData<UserEventType>;
@@ -319,7 +311,7 @@ where
     H: WindowHandler<UserEventType>
 {
     window_handler: H,
-    renderer: GLRenderer,
+    renderer: Rc<RefCell<GLRenderer>>,
     phantom: PhantomData<UserEventType>
 }
 
@@ -328,7 +320,7 @@ where
     H: WindowHandler<UserEventType>,
     UserEventType: 'static
 {
-    pub fn new(window_handler: H, renderer: GLRenderer) -> Self
+    pub fn new(window_handler: H, renderer: Rc<RefCell<GLRenderer>>) -> Self
     {
         DrawingWindowHandler {
             window_handler,
@@ -364,7 +356,7 @@ where
         size_pixels: UVec2
     )
     {
-        self.renderer.set_viewport_size_pixels(size_pixels);
+        self.renderer.borrow_mut().set_viewport_size_pixels(size_pixels);
         self.window_handler.on_resize(helper, size_pixels)
     }
 
@@ -407,7 +399,7 @@ where
         let renderer = &mut self.renderer;
         let window_handler = &mut self.window_handler;
 
-        renderer.draw_frame(|graphics| window_handler.on_draw(helper, graphics))
+        renderer.borrow_mut().draw_frame(|graphics| window_handler.on_draw(helper, graphics))
     }
 
     #[inline]
@@ -535,6 +527,11 @@ impl<UserEventType> WindowHelper<UserEventType>
     pub fn terminate_loop(&mut self)
     {
         self.inner.terminate_loop()
+    }
+
+    pub fn create_font_from_bytes(&self, bytes: &[u8]) -> Result<crate::font::Font, i32>
+    {
+        self.inner.create_font_from_bytes(bytes)
     }
 
     /// Sets the window icon from the provided RGBA pixels.
@@ -666,7 +663,7 @@ impl<UserEventType> WindowHelper<UserEventType>
     }
 }
 
-#[cfg(any(doc, doctest, not(target_arch = "wasm32")))]
+//#[cfg(any(doc, doctest, not(target_arch = "wasm32")))]
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 #[must_use]
 pub(crate) enum WindowEventLoopAction

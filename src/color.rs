@@ -19,10 +19,10 @@
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Color
 {
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32
+    pub(crate) r: f32,
+    pub(crate) g: f32,
+    pub(crate) b: f32,
+    pub(crate) a: f32
 }
 
 impl Color
@@ -206,6 +206,31 @@ impl Color
     pub fn subjective_brightness(&self) -> f32
     {
         self.r * 0.299 + self.g * 0.587 + self.b * 0.114
+    }
+}
+
+impl From<[u8; 4]> for Color
+{
+    #[inline]
+    #[must_use]
+    fn from(value: [u8; 4]) -> Self
+    {
+        Color::from_int_rgba(value[0], value[1], value[2], value[3])
+    }
+}
+
+impl From<Color> for [u8; 4]
+{
+    #[inline]
+    #[must_use]
+    fn from(value: Color) -> Self
+    {
+        [
+            (value.r * 255.0) as u8,
+            (value.g * 255.0) as u8,
+            (value.b * 255.0) as u8,
+            (value.a * 255.0) as u8,
+        ]
     }
 }
 

@@ -14,6 +14,121 @@
  *  limitations under the License.
  */
 
+pub struct Font
+{
+    f: crate::text::Font,
+}
+
+impl Font
+{
+    // TODO the mq version can't do Font::new()
+
+    pub(crate) fn new_from_other_kind_of_font(f: crate::text::Font) -> Self
+    {
+        return Self
+        {
+            f: f,
+        };
+    }
+}
+
+pub struct FormattedTextBlock
+{
+    pub f: crate::text::Font,
+    pub text: String,
+    pub scale: f32,
+    pub options: TextOptions,
+    pub dim : crate::text::TextDimensions,
+}
+
+impl FormattedTextBlock
+{
+    /*
+    /// Iterate over the lines of text in this block.
+    #[inline]
+    pub fn iter_lines(&self) -> Iter<'_, FormattedTextLine>
+    {
+        self.lines.iter()
+    }
+    */
+
+    /// The width (in pixels) of this text block.
+    #[inline]
+    #[must_use]
+    pub fn width(&self) -> f32
+    {
+        self.dim.width
+    }
+
+    /// The height (in pixels) of this text block.
+    #[inline]
+    #[must_use]
+    pub fn height(&self) -> f32
+    {
+        self.dim.height
+    }
+
+/*
+    /// The size (in pixels) of this text block.
+    #[inline]
+    #[must_use]
+    pub fn size(&self) -> Vec2
+    {
+        Vec2::new(self.width, self.height)
+    }
+    */
+}
+
+/// Objects implementing this trait are able to lay out text, ready for
+/// rendering.
+pub trait TextLayout
+{
+    /// Lays out a block of text with the specified scale and options. The
+    /// result may be passed to `Graphics2D::draw_text`.
+    ///
+    /// As the string undergoes normalization before being laid out, the
+    /// `user_index` of each `FormattedGlyph` is undefined. To gain control
+    /// over the `user_index` field, consider using
+    /// either `layout_text_line_from_codepoints()` or
+    /// `layout_text_line_from_unindexed_codepoints()`.
+    #[inline]
+    #[must_use]
+    fn layout_text(
+        &self,
+        text: &str,
+        scale: f32,
+        options: TextOptions
+    ) -> FormattedTextBlock;
+
+}
+
+impl TextLayout for Font
+{
+    fn layout_text(
+        &self,
+        text: &str,
+        scale: f32,
+        options: TextOptions
+    ) -> FormattedTextBlock
+    {
+        let dim = crate::text::measure_text(
+            text,
+            &self.f,
+            scale as u16,
+            1.0
+            );
+        FormattedTextBlock
+        {
+            f: self.f.clone(),
+            text: text.to_string(),
+            scale: scale,
+            options: options,
+            dim: dim,
+        }
+    }
+}
+
+/*
 use std::collections::VecDeque;
 use std::convert::TryInto;
 use std::fmt::{Debug, Formatter};
@@ -793,6 +908,7 @@ impl FontFamily
         }
     }
 }
+*/
 
 /// The horizontal alignment of a block of text. This can be set when calling
 /// `TextOptions::with_wrap_words_after_width`.
@@ -897,6 +1013,7 @@ impl Default for TextOptions
     }
 }
 
+/*
 /// Represents a glyph which has been laid out as part of a line of text.
 #[derive(Clone)]
 pub struct FormattedGlyph
@@ -1203,3 +1320,4 @@ mod test
         )
     }
 }
+*/

@@ -19,7 +19,26 @@ use std::time::Instant;
 
 use crate::error::{BacktraceError, ErrorMessage};
 #[cfg(target_arch = "wasm32")]
-use crate::web::{WebPerformance, WebWindow};
+//use crate::web::{WebPerformance, WebWindow};
+
+use web_sys::{Performance, Window};
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone)]
+pub struct WebPerformance
+{
+    performance: Performance
+}
+
+#[cfg(target_arch = "wasm32")]
+impl WebPerformance
+{
+    #[inline]
+    pub fn now(&self) -> f64
+    {
+        self.performance.now()
+    }
+}
 
 /// Measures the amount of time elapsed since its creation.
 pub struct Stopwatch
@@ -63,7 +82,7 @@ impl TimeClock
     {
         #[cfg(target_arch = "wasm32")]
         return Ok(Self {
-            performance: WebWindow::new()?.performance()?
+            performance: WebPerformance { performance: web_sys::window().unwrap().performance().unwrap() }
         });
 
         #[cfg(not(target_arch = "wasm32"))]

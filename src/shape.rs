@@ -286,14 +286,6 @@ where
     }
 }
 
-impl<T> From<rusttype::Rect<T>> for Rectangle<T>
-{
-    fn from(rect: rusttype::Rect<T>) -> Self
-    {
-        Rectangle::new(Vector2::from(rect.min), Vector2::from(rect.max))
-    }
-}
-
 impl<T: num_traits::AsPrimitive<f32>> Rectangle<T>
 {
     /// Returns a new rectangle where the coordinates have been cast to `f32`
