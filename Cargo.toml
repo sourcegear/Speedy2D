@@ -26,7 +26,7 @@ glam = {version = "0.21", features = ["scalar-math"] }
 log = "0.4"
 backtrace = "0.3"
 fontdue = "0.7"
-unicode-normalization = "0.1"
+#unicode-normalization = "0.1"
 num-traits = "0.2"
 earcutr = "0.2.0"
 smallvec = "1.9.0"
@@ -35,22 +35,6 @@ miniquad = "0.4.0"
 # For image_loading feature
 image = { version = "0.23", optional = true }
 
-[target.'cfg(any(doc, doctest, target_arch = "wasm32"))'.dependencies.web-sys]
-version = "0.3"
-features = [
-    #"AddEventListenerOptions",
-    #"CssStyleDeclaration",
-    #"DomRect",
-    #"HtmlCanvasElement",
-    #"KeyboardEvent",
-    #"MediaQueryList",
-    #"MediaQueryListEvent",
-    #"MouseEvent",
-    #"WheelEvent",
-    "Performance",
-    #"WebGl2RenderingContext",
-    "Window",
-]
 # Tests using a headless GL context.
 
 [[test]]
@@ -61,12 +45,6 @@ harness = false
 [dev-dependencies]
 simple_logger = { version = "1.11", default-features = false, features = ["colors"] }
 image = { version = "0.23" }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-glutin = "0.28"
-
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen = { version = "0.2" }
 
 # Examples: must be listed manually as they require the "windowing" feature.
 
